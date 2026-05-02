@@ -1,4 +1,4 @@
-import { EventData, Page, Observable, alert, inputType, prompt } from "@nativescript/core";
+import { EventData, Page, Observable, alert } from "@nativescript/core";
 import { productStore } from "../../stores/ProductStore";
 import { filterStore } from "../../stores/FilterStore";
 import { cartStore } from "../../stores/CartStore";
@@ -101,6 +101,12 @@ function refresh() {
       categoryText: `${product.category} / ${product.subCategory}`,
       priceText: money(product.price),
       graphicText: graphicText(product.category),
+      productCardAutomationText: `product-card-${product.id}`,
+      graphicAutomationText: `product-graphic-${product.id}`,
+      graphicTextAutomationText: `product-graphic-text-${product.id}`,
+      nameAutomationText: `product-name-${product.id}`,
+      metaAutomationText: `product-meta-${product.id}`,
+      priceAutomationText: `product-price-${product.id}`,
       addAutomationText: `product-add-${product.id}`
     }))
   );
@@ -111,6 +117,7 @@ function refresh() {
       ...item,
       detail: `${item.size || ""} ${item.color || ""} Qty: ${item.qty}`,
       priceText: money(item.price * item.qty),
+      rowAutomationText: `cart-item-${item.variantId}`,
       nameAutomationText: `cart-item-name-${item.variantId}`,
       detailAutomationText: `cart-item-detail-${item.variantId}`,
       priceAutomationText: `cart-item-price-${item.variantId}`
@@ -127,9 +134,37 @@ function refresh() {
   vm.set("demoPaymentHint", "Demo card: 4242 4242 4242 4242");
   vm.set("cartVisible", visibility(hasItems));
   vm.set("emptyCartVisible", visibility(!hasItems));
+  vm.set("checkoutButtonVisible", visibility(hasItems && !IsVisible("paymentVisible")));
 
   vm.set("shoesVisible", visibility(filterStore.selectedCategory === "shoes"));
   vm.set("bootsVisible", visibility(filterStore.selectedCategory === "boots"));
+}
+
+function IsVisible(propertyName: string) {
+  return vm.get(propertyName) === "visible";
+}
+
+function setMessage(message: string) {
+  vm.set("messageText", message);
+  vm.set("messageVisible", visibility(true));
+}
+
+function clearMessage() {
+  vm.set("messageText", "");
+  vm.set("messageVisible", visibility(false));
+}
+
+function showPayment() {
+  clearMessage();
+  vm.set("paymentCardNumber", "4242 4242 4242 4242");
+  vm.set("paymentTitleText", `Charge ${money(cartStore.total)}`);
+  vm.set("paymentVisible", visibility(true));
+  vm.set("checkoutButtonVisible", visibility(false));
+}
+
+function hidePayment() {
+  vm.set("paymentVisible", visibility(false));
+  vm.set("checkoutButtonVisible", visibility(cartStore.items.length > 0));
 }
 
 function addProduct(product: Product) {
@@ -143,7 +178,7 @@ function addProduct(product: Product) {
   const result = cartStore.add(product, variant);
 
   if (!result.added) {
-    alert(result.message || "No stock available.");
+    setMessage(result.message || "No stock available.");
   }
 
   refresh();
@@ -198,48 +233,48 @@ export function onHikingTap() {
   refresh();
 }
 
-export async function onCheckoutTap() {
+export function onCheckoutTap() {
   if (cartStore.items.length === 0) {
-    alert("Cart is empty");
+    setMessage("Cart is empty");
     return;
   }
 
+  showPayment();
+}
+
+export function onPaymentCancelTap() {
+  hidePayment();
+}
+
+export function onPaymentSubmitTap() {
   const total = money(cartStore.total);
-  const result = await prompt({
-    title: "Demo Credit Card",
-    message: `Charge ${total}`,
-    okButtonText: "Pay",
-    cancelButtonText: "Cancel",
-    defaultText: "4242 4242 4242 4242",
-    inputType: inputType.number
-  });
-
-  if (!result.result) {
-    return;
-  }
-
-  const cardNumber = normalizeCardNumber(result.text || "");
+  const cardNumber = normalizeCardNumber(vm.get("paymentCardNumber") || "");
 
   if (cardNumber.length < 13 || cardNumber.length > 19 || !passesLuhn(cardNumber)) {
-    alert("Enter a valid demo card number.");
+    setMessage("Enter a valid demo card number.");
     return;
   }
 
   const authorization = authorizeDemoCard(cardNumber);
 
   if (!authorization.approved) {
-    alert(authorization.message);
+    setMessage(authorization.message);
     return;
   }
 
   try {
     cartStore.completeSale(cardNumber.slice(-4));
     productStore.load();
+    hidePayment();
     refresh();
   } catch (error) {
-    alert(error instanceof Error ? error.message : "Unable to complete sale.");
+    setMessage(error instanceof Error ? error.message : "Unable to complete sale.");
     return;
   }
 
-  alert(`Sale completed. ${authorization.message}. Total: ${total}`);
+  setMessage(`Sale completed. ${authorization.message}. Total: ${total}`);
+}
+
+export function onMessageOkTap() {
+  clearMessage();
 }

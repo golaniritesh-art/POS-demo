@@ -5,7 +5,9 @@
   "private": true,
   "scripts": {
     "android:build": "ns build android",
-    "test:appium": "dotnet test tests/AppiumRegression/AppiumRegression.csproj"
+    "test:appium": "dotnet test tests/AppiumRegression/AppiumRegression.csproj",
+    "test:browserstack": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-browserstack-appium.ps1",
+    "test:browserstack:uploaded": "dotnet test tests/AppiumRegression/AppiumRegression.csproj -- TestRunParameters.Parameter(name=\"BROWSERSTACK_ENABLED\", value=\"true\")"
   },
   "dependencies": {
     "@nativescript/core": "~9.0.0",

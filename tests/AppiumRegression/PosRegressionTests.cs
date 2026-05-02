@@ -16,15 +16,27 @@ public class PosRegressionTests
     [SetUp]
     public void SetUp()
     {
-        var apkPath = Environment.GetEnvironmentVariable("POS_APK") ?? DefaultApkPath();
+        var runOnBrowserStack = IsTruthy(Setting("BROWSERSTACK_ENABLED"));
+        var options = runOnBrowserStack ? BrowserStackOptions() : LocalOptions();
+        var serverUrl = runOnBrowserStack
+            ? "https://hub-cloud.browserstack.com/wd/hub"
+            : Setting("APPIUM_SERVER_URL") ?? "http://127.0.0.1:4723";
 
+        _driver = new AndroidDriver(new Uri(serverUrl), options, TimeSpan.FromMinutes(3));
+        _driver.Manage().Timeouts().ImplicitWait = TimeSpan.FromSeconds(2);
+        _driver.StartActivity("org.nativescript.retailpos", "com.tns.NativeScriptActivity");
+    }
+
+    private static AppiumOptions LocalOptions()
+    {
+        var apkPath = Setting("POS_APK") ?? DefaultApkPath();
         Assert.That(File.Exists(apkPath), Is.True, $"APK not found at {apkPath}. Build it first with: npm run android:build");
 
         var options = new AppiumOptions
         {
             PlatformName = "Android",
             AutomationName = "UiAutomator2",
-            DeviceName = Environment.GetEnvironmentVariable("APPIUM_DEVICE_NAME") ?? "emulator-5554",
+            DeviceName = Setting("APPIUM_DEVICE_NAME") ?? "emulator-5554",
             App = apkPath
         };
 
@@ -34,10 +46,45 @@ public class PosRegressionTests
         options.AddAdditionalAppiumOption("noReset", false);
         options.AddAdditionalAppiumOption("newCommandTimeout", 120);
 
-        var serverUrl = Environment.GetEnvironmentVariable("APPIUM_SERVER_URL") ?? "http://127.0.0.1:4723";
-        _driver = new AndroidDriver(new Uri(serverUrl), options, TimeSpan.FromMinutes(3));
-        _driver.Manage().Timeouts().ImplicitWait = TimeSpan.FromSeconds(2);
-        _driver.StartActivity("org.nativescript.retailpos", "com.tns.NativeScriptActivity");
+        return options;
+    }
+
+    private static AppiumOptions BrowserStackOptions()
+    {
+        var username = RequiredEnv("BROWSERSTACK_USERNAME");
+        var accessKey = RequiredEnv("BROWSERSTACK_ACCESS_KEY");
+        var app = RequiredEnv("BROWSERSTACK_APP");
+
+        var options = new AppiumOptions
+        {
+            PlatformName = "Android",
+            AutomationName = "UiAutomator2",
+            DeviceName = Setting("BROWSERSTACK_DEVICE_NAME") ?? "Samsung Galaxy S23"
+        };
+
+        options.App = app;
+        options.AddAdditionalAppiumOption("platformVersion", Setting("BROWSERSTACK_OS_VERSION") ?? "13.0");
+        options.AddAdditionalAppiumOption("appPackage", "org.nativescript.retailpos");
+        options.AddAdditionalAppiumOption("appActivity", "com.tns.NativeScriptActivity");
+        options.AddAdditionalAppiumOption("autoGrantPermissions", true);
+        options.AddAdditionalAppiumOption("noReset", false);
+        options.AddAdditionalAppiumOption("newCommandTimeout", 120);
+
+        var browserStackOptions = new Dictionary<string, object>
+        {
+            ["userName"] = username,
+            ["accessKey"] = accessKey,
+            ["projectName"] = Setting("BROWSERSTACK_PROJECT_NAME") ?? "Retail POS",
+            ["buildName"] = Setting("BROWSERSTACK_BUILD_NAME") ?? $"local-{DateTime.UtcNow:yyyyMMdd-HHmmss}",
+            ["sessionName"] = TestContext.CurrentContext.Test.Name,
+            ["debug"] = "true",
+            ["networkLogs"] = "true",
+            ["deviceLogs"] = "true",
+            ["appiumLogs"] = "true"
+        };
+
+        options.AddAdditionalOption("bstack:options", browserStackOptions);
+        return options;
     }
 
     [TearDown]
@@ -75,10 +122,14 @@ public class PosRegressionTests
     {
         TapByAccessibilityId("product-add-p1");
         TapByAccessibilityId("checkout-button");
-        TapText("PAY");
 
-        WaitForTextContains("Sale completed. Approved **** 4242.");
-        TapText("OK");
+        Assert.That(TextByAccessibilityId("payment-title"), Is.EqualTo("Charge $97.19"));
+        SetTextByAccessibilityId("payment-card-input", "4242 4242 4242 4242");
+        TapByAccessibilityId("payment-submit-button");
+
+        WaitForAccessibilityId("message-text");
+        Assert.That(TextByAccessibilityId("message-text"), Does.Contain("Sale completed. Approved **** 4242."));
+        TapByAccessibilityId("message-ok-button");
 
         Assert.That(TextByAccessibilityId("cart-count"), Is.EqualTo("Empty cart"));
         Assert.That(TextByAccessibilityId("header-total"), Is.EqualTo("Total: $0.00"));
@@ -92,8 +143,9 @@ public class PosRegressionTests
             TapByAccessibilityId("product-add-p1");
         }
 
-        WaitForTextContains("Only 5 Running Shoe");
-        TapText("OK");
+        WaitForAccessibilityId("message-text");
+        Assert.That(TextByAccessibilityId("message-text"), Does.Contain("Only 5 Running Shoe"));
+        TapByAccessibilityId("message-ok-button");
 
         Assert.That(TextByAccessibilityId("cart-item-detail-v1"), Is.EqualTo("8 Black Qty: 5"));
     }
@@ -117,6 +169,23 @@ public class PosRegressionTests
             "app-debug.apk"));
     }
 
+    private static bool IsTruthy(string? value)
+    {
+        return value is not null && new[] { "1", "true", "yes", "on" }.Contains(value.Trim(), StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static string RequiredEnv(string name)
+    {
+        var value = Setting(name);
+        Assert.That(value, Is.Not.Null.And.Not.Empty, $"{name} must be set when BROWSERSTACK_ENABLED=true.");
+        return value!;
+    }
+
+    private static string? Setting(string name)
+    {
+        return Environment.GetEnvironmentVariable(name) ?? TestContext.Parameters.Get(name);
+    }
+
     private IWebElement ElementByAccessibilityId(string accessibilityId)
     {
         return WaitUntil(_ => Driver.FindElement(MobileBy.AccessibilityId(accessibilityId)));
@@ -132,14 +201,16 @@ public class PosRegressionTests
         ElementByAccessibilityId(accessibilityId).Click();
     }
 
-    private void TapText(string text)
+    private void SetTextByAccessibilityId(string accessibilityId, string text)
     {
-        WaitUntil(_ => Driver.FindElement(MobileBy.AndroidUIAutomator($"new UiSelector().text(\"{text}\")"))).Click();
+        var element = ElementByAccessibilityId(accessibilityId);
+        element.Clear();
+        element.SendKeys(text);
     }
 
-    private void WaitForTextContains(string text)
+    private void WaitForAccessibilityId(string accessibilityId)
     {
-        WaitUntil(_ => Driver.FindElement(MobileBy.AndroidUIAutomator($"new UiSelector().textContains(\"{text}\")")));
+        ElementByAccessibilityId(accessibilityId);
     }
 
     private T WaitUntil<T>(Func<IWebDriver, T> condition)

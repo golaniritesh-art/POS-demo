@@ -21,31 +21,36 @@
       </StackLayout>
     </ScrollView>
 
-    <ListView row="2" items="{{ products }}" class="product-list" separatorColor="transparent">
+    <ListView row="2" items="{{ products }}" class="product-list" separatorColor="transparent" automationText="product-list">
       <ListView.itemTemplate>
-        <GridLayout columns="auto, *, auto" rows="auto, auto, auto" class="product-card">
-          <GridLayout col="0" row="0" rowSpan="3" class="product-graphic">
-            <Label text="{{ graphicText }}" class="product-graphic-text" />
+        <GridLayout columns="auto, *, auto" rows="auto, auto, auto" class="product-card" automationText="{{ productCardAutomationText }}">
+          <GridLayout col="0" row="0" rowSpan="3" class="product-graphic" automationText="{{ graphicAutomationText }}">
+            <Label text="{{ graphicText }}" class="product-graphic-text" automationText="{{ graphicTextAutomationText }}" />
           </GridLayout>
-          <Label col="1" row="0" text="{{ name }}" class="product-name" />
-          <Label col="1" row="1" text="{{ categoryText }}" class="product-meta" />
-          <Label col="1" row="2" text="{{ priceText }}" class="product-price" />
+          <Label col="1" row="0" text="{{ name }}" class="product-name" automationText="{{ nameAutomationText }}" />
+          <Label col="1" row="1" text="{{ categoryText }}" class="product-meta" automationText="{{ metaAutomationText }}" />
+          <Label col="1" row="2" text="{{ priceText }}" class="product-price" automationText="{{ priceAutomationText }}" />
           <Button col="2" row="0" rowSpan="3" text="+ Add" tap="onProductAddTap" class="add-button" automationText="{{ addAutomationText }}" />
         </GridLayout>
       </ListView.itemTemplate>
     </ListView>
 
-    <StackLayout row="3" class="cart">
+    <StackLayout row="3" class="cart" automationText="cart-panel">
       <GridLayout columns="*, auto" class="cart-header">
         <Label col="0" text="Cart" class="cart-title" automationText="cart-title" />
         <Label col="1" text="{{ subtotalText }}" class="subtotal" automationText="cart-subtotal" />
       </GridLayout>
 
+      <GridLayout columns="*, auto" class="message-row" visibility="{{ messageVisible }}" automationText="message-row">
+        <Label col="0" text="{{ messageText }}" class="message-text" automationText="message-text" textWrap="true" />
+        <Button col="1" text="OK" tap="onMessageOkTap" class="message-ok" automationText="message-ok-button" />
+      </GridLayout>
+
       <Label text="No items added" class="empty-cart" visibility="{{ emptyCartVisible }}" automationText="cart-empty" />
 
-      <Repeater items="{{ cartItems }}" visibility="{{ cartVisible }}">
+      <Repeater items="{{ cartItems }}" visibility="{{ cartVisible }}" automationText="cart-item-list">
         <Repeater.itemTemplate>
-          <GridLayout columns="*, auto" rows="auto, auto" class="cart-item">
+          <GridLayout columns="*, auto" rows="auto, auto" class="cart-item" automationText="{{ rowAutomationText }}">
             <Label col="0" row="0" text="{{ name }}" class="cart-item-name" automationText="{{ nameAutomationText }}" />
             <Label col="1" row="0" text="{{ priceText }}" class="cart-item-price" automationText="{{ priceAutomationText }}" />
             <Label col="0" row="1" colSpan="2" text="{{ detail }}" class="cart-detail" automationText="{{ detailAutomationText }}" />
@@ -53,13 +58,22 @@
         </Repeater.itemTemplate>
       </Repeater>
 
-      <GridLayout columns="*, auto" class="tax-row" visibility="{{ cartVisible }}">
+      <GridLayout columns="*, auto" class="tax-row" visibility="{{ cartVisible }}" automationText="cart-totals-row">
         <Label col="0" text="{{ taxText }}" class="tax" automationText="cart-tax" />
         <Label col="1" text="{{ totalText }}" class="total" automationText="cart-total" />
       </GridLayout>
 
       <Label text="{{ demoPaymentHint }}" class="payment-hint" visibility="{{ cartVisible }}" automationText="payment-hint" />
-      <Button text="Pay with Demo Card" tap="onCheckoutTap" class="checkout" visibility="{{ cartVisible }}" automationText="checkout-button" />
+      <Button text="Pay with Demo Card" tap="onCheckoutTap" class="checkout" visibility="{{ checkoutButtonVisible }}" automationText="checkout-button" />
+
+      <StackLayout class="payment-panel" visibility="{{ paymentVisible }}" automationText="payment-panel">
+        <Label text="{{ paymentTitleText }}" class="payment-title" automationText="payment-title" />
+        <TextField text="{{ paymentCardNumber }}" hint="Demo card number" keyboardType="number" class="payment-input" automationText="payment-card-input" />
+        <GridLayout columns="*, *" class="payment-actions">
+          <Button col="0" text="Cancel" tap="onPaymentCancelTap" class="payment-cancel" automationText="payment-cancel-button" />
+          <Button col="1" text="Pay" tap="onPaymentSubmitTap" class="payment-submit" automationText="payment-submit-button" />
+        </GridLayout>
+      </StackLayout>
     </StackLayout>
   </GridLayout>
 </Page>

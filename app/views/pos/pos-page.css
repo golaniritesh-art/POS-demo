@@ -143,6 +143,29 @@
   padding: 8 0;
 }
 
+.message-row {
+  margin: 8 0;
+  padding: 8;
+  border-radius: 8;
+  background-color: #fef3c7;
+}
+
+.message-text {
+  color: #78350f;
+  font-size: 13;
+  font-weight: 700;
+}
+
+.message-ok {
+  min-width: 58;
+  height: 34;
+  border-radius: 8;
+  background-color: #78350f;
+  color: #ffffff;
+  font-size: 12;
+  font-weight: 800;
+}
+
 .cart-item {
   padding: 7 0;
   border-bottom-width: 1;
@@ -196,4 +219,50 @@
   color: #ffffff;
   font-size: 16;
   font-weight: 800;
+}
+
+.payment-panel {
+  margin-top: 10;
+  padding: 10;
+  border-radius: 8;
+  background-color: #eef6f5;
+}
+
+.payment-title {
+  color: #0f766e;
+  font-size: 14;
+  font-weight: 800;
+  margin-bottom: 8;
+}
+
+.payment-input {
+  height: 44;
+  padding: 0 10;
+  border-radius: 8;
+  background-color: #ffffff;
+  color: #111827;
+  font-size: 16;
+}
+
+.payment-actions {
+  margin-top: 10;
+}
+
+.payment-cancel,
+.payment-submit {
+  height: 42;
+  margin: 0 4;
+  border-radius: 8;
+  font-size: 14;
+  font-weight: 800;
+}
+
+.payment-cancel {
+  background-color: #e5e7eb;
+  color: #1f2937;
+}
+
+.payment-submit {
+  background-color: #0f766e;
+  color: #ffffff;
 }
