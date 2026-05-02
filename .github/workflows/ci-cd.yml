@@ -10,6 +10,21 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      browserstack_app:
+        description: BrowserStack app URL or uploaded app id, for example bs://... or custom_id/shareable id.
+        required: false
+        type: string
+      browserstack_device_name:
+        description: BrowserStack Android device name.
+        required: false
+        default: Samsung Galaxy S25
+        type: string
+      browserstack_os_version:
+        description: BrowserStack Android OS version.
+        required: false
+        default: "15.0"
+        type: string
 
 permissions:
   contents: write
@@ -126,7 +141,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: retail-pos-debug-apk
-          path: platforms/android/app/build/outputs/apk/debug/app-debug.apk
+          path: platforms/android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
       - name: Upload Appium regression artifacts
@@ -136,6 +151,52 @@ jobs:
           name: appium-regression-results
           path: appium-results
           if-no-files-found: warn
+
+  browserstack-appium:
+    name: BrowserStack Appium
+    runs-on: ubuntu-latest
+    needs: ci
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    env:
+      BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+      BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+      BROWSERSTACK_APP: ${{ inputs.browserstack_app }}
+      BROWSERSTACK_DEVICE_NAME: ${{ inputs.browserstack_device_name }}
+      BROWSERSTACK_OS_VERSION: ${{ inputs.browserstack_os_version }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Restore C# Appium regression project
+        run: dotnet restore tests/AppiumRegression/AppiumRegression.csproj
+
+      - name: Run BrowserStack Appium regression suite
+        shell: pwsh
+        run: ./scripts/run-browserstack-appium.ps1
 
   create-failure-issue:
     name: Create GitHub Issue On Failure

@@ -26,11 +26,12 @@ Build the APK, upload it to BrowserStack App Automate, and run the Appium regres
 ```powershell
 $env:BROWSERSTACK_USERNAME = "your_username"
 $env:BROWSERSTACK_ACCESS_KEY = "your_access_key"
+$env:BROWSERSTACK_APP = "bs://your_uploaded_app_id"
 
 npm run test:browserstack
 ```
 
-The script uploads `platforms\android\app\build\outputs\apk\debug\app-debug.apk` and passes the returned `bs://...` app URL into the test process as `BROWSERSTACK_APP`.
+If `BROWSERSTACK_APP` is set, the script uses that app URL or uploaded app id directly. If it is empty, the script uploads `platforms\android\app\build\outputs\apk\debug\app-debug.apk` and passes the returned `bs://...` app URL into the test process as `BROWSERSTACK_APP`.
 
 To upload an already-built APK without rebuilding:
 
@@ -64,5 +65,15 @@ $env:BROWSERSTACK_PROJECT_NAME = "Retail POS"
 $env:BROWSERSTACK_BUILD_NAME = "build-123"
 $env:BROWSERSTACK_CUSTOM_ID = "retail-pos-latest"
 ```
+
+In GitHub Actions, the workflow expects these secrets:
+
+```yml
+env:
+  BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+  BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+```
+
+If you already uploaded the app, pass `browserstack_app` to `workflow_dispatch` or set `BROWSERSTACK_APP` in the workflow environment. If you leave it blank, the upload script will upload the APK for you.
 
 The BrowserStack mode sends `bstack:options` with text, Appium, device, visual, and network logs enabled so failures have enough diagnostics in the BrowserStack dashboard.

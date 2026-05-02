@@ -30,11 +30,21 @@ function Invoke-CheckedCommand {
 
 $username = Require-Env "BROWSERSTACK_USERNAME"
 $accessKey = Require-Env "BROWSERSTACK_ACCESS_KEY"
+$existingApp = [Environment]::GetEnvironmentVariable("BROWSERSTACK_APP")
 
 Add-Type -AssemblyName System.Net.Http
 
 if (-not $SkipBuild) {
     Invoke-CheckedCommand "npm" @("run", "android:build")
+}
+
+if (-not [string]::IsNullOrWhiteSpace($existingApp)) {
+    $env:BROWSERSTACK_ENABLED = "true"
+    $env:BROWSERSTACK_APP = $existingApp
+
+    Write-Host "Using existing BrowserStack app $existingApp"
+    Invoke-CheckedCommand "dotnet" @("test", "tests/AppiumRegression/AppiumRegression.csproj")
+    return
 }
 
 if ([string]::IsNullOrWhiteSpace($ApkPath)) {
