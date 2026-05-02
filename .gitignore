@@ -19,6 +19,9 @@ yarn-error.log*
 .project
 tmp/
 typings/
+*.db
+emulator-*.png
+/ns
 
 # Visual Studio Code
 .vscode/*
