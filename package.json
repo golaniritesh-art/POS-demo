@@ -6,7 +6,9 @@
   "scripts": {
     "android:build": "npx ns build android",
     "test:appium": "dotnet test tests/AppiumRegression/AppiumRegression.csproj",
+    "test:appium:smoke": "dotnet test tests/AppiumRegression/AppiumRegression.csproj --filter TestCategory=Smoke",
     "test:browserstack": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-browserstack-appium.ps1",
+    "test:browserstack:smoke": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-browserstack-appium.ps1 -TestFilter TestCategory=Smoke",
     "test:browserstack:uploaded": "dotnet test tests/AppiumRegression/AppiumRegression.csproj -- TestRunParameters.Parameter(name=\"BROWSERSTACK_ENABLED\", value=\"true\")"
   },
   "dependencies": {

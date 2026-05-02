@@ -428,13 +428,13 @@ jobs:
         uses: actions/ai-inference@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          prompt-file: ./.github/prompts/appium-self-heal.prompt.yml
+          prompt-file: .github/prompts/self-heal-commands.yml
           file_input: |
             metadata: self-heal/context/workflow-metadata.md
             artifact_summary: self-heal/context/artifact-summary.md
             trx: self-heal/context/appium-regression.trx.txt
             appium_log: self-heal/context/appium.log.txt
-            appium_console: self-heal/context/appium-console.log.txt
+            appium_console: self-heal/context/give me pro.txt
             current_tests: tests/AppiumRegression/PosRegressionTests.cs
             workflow: .github/workflows/ci-cd.yml
           model: openai/gpt-4o

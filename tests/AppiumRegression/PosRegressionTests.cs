@@ -99,6 +99,7 @@ public class PosRegressionTests
     }
 
     [Test]
+    [Category("Smoke")]
     public void LaunchesToAnEmptyPosCart()
     {
         Assert.That(TextByAccessibilityId("pos-screen-title"), Is.EqualTo("Quick sale"));
@@ -108,6 +109,7 @@ public class PosRegressionTests
     }
 
     [Test]
+    [Category("Smoke")]
     public void AddsRunningShoeAndCalculatesCartTotals()
     {
         TapByAccessibilityId("product-add-p1");
@@ -176,6 +178,7 @@ public class PosRegressionTests
     }
 
     [Test]
+    [Category("Smoke")]
     public void CompletesDemoCardCheckoutAndClearsCart()
     {
         TapByAccessibilityId("product-add-p1");
@@ -263,7 +266,17 @@ public class PosRegressionTests
 
     private IWebElement ElementByAccessibilityId(string accessibilityId)
     {
-        return WaitUntil(_ => Driver.FindElement(MobileBy.AccessibilityId(accessibilityId)));
+        return WaitUntil(_ =>
+        {
+            try
+            {
+                return Driver.FindElement(MobileBy.AndroidUIAutomator($"new UiSelector().resourceId(\"{accessibilityId}\")"));
+            }
+            catch (NoSuchElementException)
+            {
+                return Driver.FindElement(MobileBy.AccessibilityId(accessibilityId));
+            }
+        });
     }
 
     private string TextByAccessibilityId(string accessibilityId)

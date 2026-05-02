@@ -1,5 +1,6 @@
 param(
     [string]$ApkPath,
+    [string]$TestFilter,
     [switch]$SkipBuild
 )
 
@@ -31,6 +32,19 @@ function Invoke-CheckedCommand {
 $username = Require-Env "BROWSERSTACK_USERNAME"
 $accessKey = Require-Env "BROWSERSTACK_ACCESS_KEY"
 $existingApp = [Environment]::GetEnvironmentVariable("BROWSERSTACK_APP")
+if ([string]::IsNullOrWhiteSpace($TestFilter)) {
+    $TestFilter = [Environment]::GetEnvironmentVariable("BROWSERSTACK_TEST_FILTER")
+}
+
+function Invoke-AppiumTests {
+    $arguments = @("test", "tests/AppiumRegression/AppiumRegression.csproj")
+
+    if (-not [string]::IsNullOrWhiteSpace($TestFilter)) {
+        $arguments += @("--filter", $TestFilter)
+    }
+
+    Invoke-CheckedCommand "dotnet" $arguments
+}
 
 Add-Type -AssemblyName System.Net.Http
 
@@ -43,7 +57,7 @@ if (-not [string]::IsNullOrWhiteSpace($existingApp)) {
     $env:BROWSERSTACK_APP = $existingApp
 
     Write-Host "Using existing BrowserStack app $existingApp"
-    Invoke-CheckedCommand "dotnet" @("test", "tests/AppiumRegression/AppiumRegression.csproj")
+    Invoke-AppiumTests
     return
 }
 
@@ -91,7 +105,7 @@ try {
     $env:BROWSERSTACK_APP = $upload.app_url
 
     Write-Host "Uploaded APK to BrowserStack as $($upload.app_url)"
-    Invoke-CheckedCommand "dotnet" @("test", "tests/AppiumRegression/AppiumRegression.csproj")
+    Invoke-AppiumTests
 }
 finally {
     if ($fileStream) {

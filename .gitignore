@@ -25,6 +25,7 @@ emulator-*.png
 retail-pos-*.png
 /ns
 appium-results/
+.browserstack.env.local
 
 # .NET
 bin/
