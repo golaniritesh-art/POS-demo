@@ -103,6 +103,10 @@ jobs:
       - name: Build Android debug APK
         run: npx ns build android
 
+      - name: Verify Android debug APK output
+        run: |
+          find platforms/android/app/build/outputs/apk -maxdepth 4 -type f | sort
+
       - name: Install Appium server and UiAutomator2 driver
         run: |
           npm install -g appium@2
