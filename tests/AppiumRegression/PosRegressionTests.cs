@@ -24,10 +24,10 @@ public class PosRegressionTests
         {
             PlatformName = "Android",
             AutomationName = "UiAutomator2",
-            DeviceName = Environment.GetEnvironmentVariable("APPIUM_DEVICE_NAME") ?? "emulator-5554"
+            DeviceName = Environment.GetEnvironmentVariable("APPIUM_DEVICE_NAME") ?? "emulator-5554",
+            App = apkPath
         };
 
-        options.AddAdditionalAppiumOption("app", apkPath);
         options.AddAdditionalAppiumOption("appPackage", "org.nativescript.retailpos");
         options.AddAdditionalAppiumOption("appActivity", "com.tns.NativeScriptActivity");
         options.AddAdditionalAppiumOption("autoGrantPermissions", true);
@@ -37,6 +37,7 @@ public class PosRegressionTests
         var serverUrl = Environment.GetEnvironmentVariable("APPIUM_SERVER_URL") ?? "http://127.0.0.1:4723";
         _driver = new AndroidDriver(new Uri(serverUrl), options, TimeSpan.FromMinutes(3));
         _driver.Manage().Timeouts().ImplicitWait = TimeSpan.FromSeconds(2);
+        _driver.StartActivity("org.nativescript.retailpos", "com.tns.NativeScriptActivity");
     }
 
     [TearDown]
@@ -101,6 +102,7 @@ public class PosRegressionTests
     {
         return Path.GetFullPath(Path.Combine(
             TestContext.CurrentContext.TestDirectory,
+            "..",
             "..",
             "..",
             "..",
