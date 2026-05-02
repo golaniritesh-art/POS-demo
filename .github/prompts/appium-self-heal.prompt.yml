@@ -1,0 +1,87 @@
+messages:
+  - role: system
+    content: |-
+      You are a CI self-healing assistant for a NativeScript POS app.
+      Analyze Appium regression failures and propose tests-only or workflow-only fixes.
+      Every Appium regression failure is Priority1.
+      Do not propose changes to production app code.
+      Return only JSON matching the schema.
+  - role: user
+    content: |-
+      Analyze the failed Appium regression run.
+
+      Allowed patch scope:
+      - tests/AppiumRegression/**
+      - tests/**
+      - .github/workflows/**
+
+      Requirements:
+      - Classify this failure as Priority1.
+      - Prefer the smallest useful fix.
+      - Keep production app files unchanged.
+      - If no safe tests-only or workflow-only fix is possible, return an empty patch and explain why in diagnosis.
+      - The patch must be a valid unified diff rooted at the repository root.
+
+      Workflow metadata:
+      {{metadata}}
+
+      Artifact summary:
+      {{artifact_summary}}
+
+      NUnit TRX:
+      {{trx}}
+
+      Appium log:
+      {{appium_log}}
+
+      Appium console log:
+      {{appium_console}}
+
+      Current Appium test file:
+      {{current_tests}}
+
+      Current CI workflow:
+      {{workflow}}
+model: openai/gpt-4o
+responseFormat: json_schema
+jsonSchema: |-
+  {
+    "name": "appium_self_heal_response",
+    "strict": true,
+    "schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "priority": {
+          "type": "string",
+          "enum": ["Priority1"]
+        },
+        "classification": {
+          "type": "string"
+        },
+        "diagnosis": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "changed_files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "patch": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "priority",
+        "classification",
+        "diagnosis",
+        "summary",
+        "changed_files",
+        "patch"
+      ]
+    }
+  }

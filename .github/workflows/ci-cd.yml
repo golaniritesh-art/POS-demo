@@ -12,8 +12,11 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   issues: write
+  pull-requests: write
+  actions: read
+  models: read
 
 jobs:
   ci:
@@ -141,9 +144,14 @@ jobs:
       - ci
       - appium-regression
     if: ${{ always() && contains(needs.*.result, 'failure') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    outputs:
+      issue_number: ${{ steps.create_issue.outputs.issue_number }}
+      issue_url: ${{ steps.create_issue.outputs.issue_url }}
+      run_url: ${{ steps.create_issue.outputs.run_url }}
 
     steps:
       - name: Create failure issue
+        id: create_issue
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPOSITORY: ${{ github.repository }}
@@ -172,7 +180,263 @@ jobs:
           EOF
           )"
 
-          gh issue create \
+          issue_url="$(gh issue create \
             --repo "${REPOSITORY}" \
             --title "${title}" \
-            --body "${body}"
+            --body "${body}")"
+          issue_number="${issue_url##*/}"
+
+          {
+            echo "issue_number=${issue_number}"
+            echo "issue_url=${issue_url}"
+            echo "run_url=${RUN_URL}"
+          } >> "${GITHUB_OUTPUT}"
+
+  self-heal:
+    name: Self-Heal Appium Regression
+    runs-on: ubuntu-latest
+    needs:
+      - appium-regression
+      - create-failure-issue
+    if: ${{ always() && needs.appium-regression.result == 'failure' && needs.create-failure-issue.outputs.issue_number != '' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download Appium regression artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: appium-regression-results
+          path: appium-results
+
+      - name: Prepare self-heal context
+        env:
+          ISSUE_NUMBER: ${{ needs.create-failure-issue.outputs.issue_number }}
+          ISSUE_URL: ${{ needs.create-failure-issue.outputs.issue_url }}
+          RUN_URL: ${{ needs.create-failure-issue.outputs.run_url }}
+          REPOSITORY: ${{ github.repository }}
+          COMMIT_SHA: ${{ github.sha }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          mkdir -p self-heal/context
+
+          cat > self-heal/context/workflow-metadata.md <<EOF
+          Repository: ${REPOSITORY}
+          Issue: #${ISSUE_NUMBER}
+          Issue URL: ${ISSUE_URL}
+          Workflow run: ${RUN_URL}
+          Ref: ${REF_NAME}
+          Commit: ${COMMIT_SHA}
+          Failure class: Priority1 Appium regression
+          EOF
+
+          {
+            echo "# Appium artifact files"
+            if [ -d appium-results ]; then
+              find appium-results -maxdepth 2 -type f -print | sort
+            else
+              echo "No appium-results directory was downloaded."
+            fi
+          } > self-heal/context/artifact-summary.md
+
+          truncate_file() {
+            local source="$1"
+            local target="$2"
+            local fallback="$3"
+            if [ -f "$source" ]; then
+              head -c 60000 "$source" > "$target"
+            else
+              printf '%s\n' "$fallback" > "$target"
+            fi
+          }
+
+          trx_file="$(find appium-results -type f -name '*.trx' -print -quit 2>/dev/null || true)"
+          if [ -n "$trx_file" ]; then
+            truncate_file "$trx_file" self-heal/context/appium-regression.trx.txt "TRX file was not found."
+          else
+            printf '%s\n' "TRX file was not found." > self-heal/context/appium-regression.trx.txt
+          fi
+
+          truncate_file appium-results/appium.log self-heal/context/appium.log.txt "Appium log was not found."
+          truncate_file appium-results/appium-console.log self-heal/context/appium-console.log.txt "Appium console log was not found."
+
+      - name: Analyze failure with GitHub Models
+        id: inference
+        uses: actions/ai-inference@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          prompt-file: ./.github/prompts/appium-self-heal.prompt.yml
+          file_input: |
+            metadata: self-heal/context/workflow-metadata.md
+            artifact_summary: self-heal/context/artifact-summary.md
+            trx: self-heal/context/appium-regression.trx.txt
+            appium_log: self-heal/context/appium.log.txt
+            appium_console: self-heal/context/appium-console.log.txt
+            current_tests: tests/AppiumRegression/PosRegressionTests.cs
+            workflow: .github/workflows/ci-cd.yml
+          model: openai/gpt-4o
+          max-tokens: 12000
+
+      - name: Apply allowed self-heal patch
+        id: patch
+        env:
+          RESPONSE_FILE: ${{ steps.inference.outputs.response-file }}
+          COMMIT_SHA: ${{ github.sha }}
+          ISSUE_NUMBER: ${{ needs.create-failure-issue.outputs.issue_number }}
+        run: |
+          mkdir -p self-heal
+
+          node <<'NODE'
+          const fs = require('fs');
+
+          const responseFile = process.env.RESPONSE_FILE;
+          let text = fs.readFileSync(responseFile, 'utf8').trim();
+          const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+          if (fenceMatch) {
+            text = fenceMatch[1].trim();
+          }
+
+          const data = JSON.parse(text);
+          fs.writeFileSync('self-heal/response.json', JSON.stringify(data, null, 2));
+          fs.writeFileSync('self-heal/generated.patch', data.patch || '');
+          fs.writeFileSync(
+            'self-heal/summary.md',
+            [
+              `Priority: ${data.priority}`,
+              `Classification: ${data.classification}`,
+              '',
+              'Diagnosis:',
+              data.diagnosis,
+              '',
+              'Summary:',
+              data.summary,
+              '',
+              'Changed files:',
+              ...(data.changed_files || []).map(file => `- ${file}`)
+            ].join('\n')
+          );
+          NODE
+
+          if [ ! -s self-heal/generated.patch ]; then
+            echo "has_patch=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          branch="self-heal/issue-${ISSUE_NUMBER}-${COMMIT_SHA::7}"
+          git checkout -b "${branch}"
+          git apply --check self-heal/generated.patch
+          git apply self-heal/generated.patch
+
+          changed_files="$(git diff --name-only)"
+          if [ -z "${changed_files}" ]; then
+            echo "has_patch=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          CHANGED_FILES="${changed_files}" node <<'NODE'
+          const changed = (process.env.CHANGED_FILES || '').split(/\r?\n/).filter(Boolean);
+          const allowed = changed.filter(file =>
+            file.startsWith('tests/') ||
+            file.startsWith('.github/workflows/')
+          );
+          if (allowed.length !== changed.length) {
+            const blocked = changed.filter(file => !allowed.includes(file));
+            console.error(`Self-heal patch touched blocked paths: ${blocked.join(', ')}`);
+            process.exit(1);
+          }
+          NODE
+
+          {
+            echo "has_patch=true"
+            echo "branch=${branch}"
+            echo "changed_files<<EOF"
+            printf '%s\n' "${changed_files}"
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Open draft self-heal PR
+        id: pr
+        if: ${{ steps.patch.outputs.has_patch == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ needs.create-failure-issue.outputs.issue_number }}
+          ISSUE_URL: ${{ needs.create-failure-issue.outputs.issue_url }}
+          RUN_URL: ${{ needs.create-failure-issue.outputs.run_url }}
+          BRANCH_NAME: ${{ steps.patch.outputs.branch }}
+          CHANGED_FILES: ${{ steps.patch.outputs.changed_files }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests .github/workflows
+          git commit -m "Self-heal Appium regression for issue #${ISSUE_NUMBER}"
+          git push --set-upstream origin "${BRANCH_NAME}"
+
+          base_branch="$(gh repo view "${REPOSITORY}" --json defaultBranchRef -q '.defaultBranchRef.name')"
+          pr_body="$(cat <<EOF
+          Self-healing proposal for ${ISSUE_URL}.
+
+          Priority: Priority1
+          Workflow run: ${RUN_URL}
+
+          This draft PR was generated from Appium regression artifacts and is limited to test/workflow files.
+
+          Changed files:
+          ${CHANGED_FILES}
+
+          Related to #${ISSUE_NUMBER}
+          EOF
+          )"
+
+          pr_url="$(gh pr create \
+            --repo "${REPOSITORY}" \
+            --base "${base_branch}" \
+            --head "${BRANCH_NAME}" \
+            --draft \
+            --title "Self-heal Appium regression for issue #${ISSUE_NUMBER}" \
+            --body "${pr_body}")"
+
+          echo "pr_url=${pr_url}" >> "${GITHUB_OUTPUT}"
+
+      - name: Comment on failure issue
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ needs.create-failure-issue.outputs.issue_number }}
+          PR_URL: ${{ steps.pr.outputs.pr_url }}
+          HAS_PATCH: ${{ steps.patch.outputs.has_patch }}
+          CHANGED_FILES: ${{ steps.patch.outputs.changed_files }}
+        run: |
+          if [ -f self-heal/summary.md ]; then
+            summary="$(cat self-heal/summary.md)"
+          else
+            summary="The self-heal analysis did not produce a usable response."
+          fi
+
+          if [ "${HAS_PATCH}" = "true" ]; then
+            body="$(cat <<EOF
+          Self-heal analysis completed.
+
+          ${summary}
+
+          Draft PR: ${PR_URL}
+
+          Commands:
+          - \`/approve-fix\` marks the generated draft PR ready for review.
+          - \`/reject-fix\` closes the generated PR and marks this proposal as rejected.
+          EOF
+          )"
+          else
+            body="$(cat <<EOF
+          Self-heal analysis completed, but no safe tests-only or workflow-only patch was produced.
+
+          ${summary}
+          EOF
+          )"
+          fi
+
+          gh issue comment "${ISSUE_NUMBER}" --repo "${REPOSITORY}" --body "${body}"

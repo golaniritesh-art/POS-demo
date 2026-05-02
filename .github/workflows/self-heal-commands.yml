@@ -1,0 +1,128 @@
+name: Self-Heal Commands
+
+on:
+  issue_comment:
+    types:
+      - created
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  handle-command:
+    name: Handle Self-Heal Command
+    runs-on: ubuntu-latest
+    if: ${{ !github.event.issue.pull_request && (contains(github.event.comment.body, '/approve-fix') || contains(github.event.comment.body, '/reject-fix')) }}
+
+    steps:
+      - name: Validate commenter permission
+        id: auth
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          COMMENTER: ${{ github.event.comment.user.login }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          permission="$(gh api "repos/${REPOSITORY}/collaborators/${COMMENTER}/permission" --jq '.permission' 2>/dev/null || true)"
+          case "${permission}" in
+            admin|maintain|write)
+              echo "authorized=true" >> "${GITHUB_OUTPUT}"
+              ;;
+            *)
+              echo "authorized=false" >> "${GITHUB_OUTPUT}"
+              gh issue comment "${ISSUE_NUMBER}" \
+                --repo "${REPOSITORY}" \
+                --body "Self-heal command rejected: @${COMMENTER} does not have write, maintain, or admin permission."
+              ;;
+          esac
+
+      - name: Resolve command and PR
+        id: command
+        if: ${{ steps.auth.outputs.authorized == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          if printf '%s' "${COMMENT_BODY}" | grep -Eq '(^|[[:space:]])/approve-fix([[:space:]]|$)'; then
+            echo "command=approve" >> "${GITHUB_OUTPUT}"
+          elif printf '%s' "${COMMENT_BODY}" | grep -Eq '(^|[[:space:]])/reject-fix([[:space:]]|$)'; then
+            echo "command=reject" >> "${GITHUB_OUTPUT}"
+          else
+            echo "command=none" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          gh pr list \
+            --repo "${REPOSITORY}" \
+            --state open \
+            --json number,url,headRefName,isDraft \
+            --limit 100 > prs.json
+
+          node <<'NODE'
+          const fs = require('fs');
+          const prs = JSON.parse(fs.readFileSync('prs.json', 'utf8'));
+          const issueNumber = process.env.ISSUE_NUMBER;
+          const match = prs.find(pr => pr.headRefName.startsWith(`self-heal/issue-${issueNumber}-`));
+          if (!match) {
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, 'pr_number=\n');
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, 'pr_url=\n');
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, 'is_draft=\n');
+            process.exit(0);
+          }
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `pr_number=${match.number}\n`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `pr_url=${match.url}\n`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `is_draft=${match.isDraft}\n`);
+          NODE
+
+      - name: Comment when no self-heal PR exists
+        if: ${{ steps.auth.outputs.authorized == 'true' && steps.command.outputs.pr_number == '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          gh issue comment "${ISSUE_NUMBER}" \
+            --repo "${REPOSITORY}" \
+            --body "No open self-heal PR was found for this issue."
+
+      - name: Approve generated fix
+        if: ${{ steps.command.outputs.command == 'approve' && steps.command.outputs.pr_number != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          PR_NUMBER: ${{ steps.command.outputs.pr_number }}
+          PR_URL: ${{ steps.command.outputs.pr_url }}
+        run: |
+          gh pr ready "${PR_NUMBER}" --repo "${REPOSITORY}"
+          gh issue comment "${ISSUE_NUMBER}" \
+            --repo "${REPOSITORY}" \
+            --body "Self-heal fix approved. Draft PR is now ready for review: ${PR_URL}"
+
+      - name: Reject generated fix
+        if: ${{ steps.command.outputs.command == 'reject' && steps.command.outputs.pr_number != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          PR_NUMBER: ${{ steps.command.outputs.pr_number }}
+          PR_URL: ${{ steps.command.outputs.pr_url }}
+        run: |
+          gh pr close "${PR_NUMBER}" \
+            --repo "${REPOSITORY}" \
+            --comment "Rejected from issue #${ISSUE_NUMBER} with /reject-fix."
+          gh label create "self-heal-rejected" \
+            --repo "${REPOSITORY}" \
+            --color "B60205" \
+            --description "Generated self-heal fix was rejected" \
+            --force
+          gh issue edit "${ISSUE_NUMBER}" \
+            --repo "${REPOSITORY}" \
+            --add-label "self-heal-rejected"
+          gh issue comment "${ISSUE_NUMBER}" \
+            --repo "${REPOSITORY}" \
+            --body "Self-heal fix rejected and PR closed: ${PR_URL}"
