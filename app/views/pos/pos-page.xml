@@ -25,11 +25,11 @@
       <ListView.itemTemplate>
         <GridLayout columns="auto, *, auto" rows="auto, auto, auto" class="product-card" automationText="{{ productCardAutomationText }}">
           <GridLayout col="0" row="0" rowSpan="3" class="product-graphic" automationText="{{ graphicAutomationText }}">
-            <Label text="{{ graphicText }}" class="product-graphic-text" automationText="{{ graphicTextAutomationText }}" />
+            <Label text="{{ graphicText }}" class="product-graphic-text" automationText="{{ graphicTextAutomationText }}" accessible="true" />
           </GridLayout>
-          <Label col="1" row="0" text="{{ name }}" class="product-name" automationText="{{ nameAutomationText }}" />
-          <Label col="1" row="1" text="{{ categoryText }}" class="product-meta" automationText="{{ metaAutomationText }}" />
-          <Label col="1" row="2" text="{{ priceText }}" class="product-price" automationText="{{ priceAutomationText }}" />
+          <Label col="1" row="0" text="{{ name }}" class="product-name" automationText="{{ nameAutomationText }}" accessible="true" />
+          <Label col="1" row="1" text="{{ categoryText }}" class="product-meta" automationText="{{ metaAutomationText }}" accessible="true" />
+          <Label col="1" row="2" text="{{ priceText }}" class="product-price" automationText="{{ priceAutomationText }}" accessible="true" />
           <Button col="2" row="0" rowSpan="3" text="+ Add" tap="onProductAddTap" class="add-button" automationText="{{ addAutomationText }}" />
         </GridLayout>
       </ListView.itemTemplate>

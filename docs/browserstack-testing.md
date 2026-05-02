@@ -58,8 +58,8 @@ npm run test:browserstack:uploaded
 Optional BrowserStack variables:
 
 ```powershell
-$env:BROWSERSTACK_DEVICE_NAME = "Samsung Galaxy S23"
-$env:BROWSERSTACK_OS_VERSION = "13.0"
+$env:BROWSERSTACK_DEVICE_NAME = "Samsung Galaxy S25"
+$env:BROWSERSTACK_OS_VERSION = "15.0"
 $env:BROWSERSTACK_PROJECT_NAME = "Retail POS"
 $env:BROWSERSTACK_BUILD_NAME = "build-123"
 $env:BROWSERSTACK_CUSTOM_ID = "retail-pos-latest"

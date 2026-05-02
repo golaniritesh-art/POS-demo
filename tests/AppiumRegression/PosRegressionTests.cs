@@ -24,7 +24,6 @@ public class PosRegressionTests
 
         _driver = new AndroidDriver(new Uri(serverUrl), options, TimeSpan.FromMinutes(3));
         _driver.Manage().Timeouts().ImplicitWait = TimeSpan.FromSeconds(2);
-        _driver.StartActivity("org.nativescript.retailpos", "com.tns.NativeScriptActivity");
     }
 
     private static AppiumOptions LocalOptions()
@@ -42,6 +41,8 @@ public class PosRegressionTests
 
         options.AddAdditionalAppiumOption("appPackage", "org.nativescript.retailpos");
         options.AddAdditionalAppiumOption("appActivity", "com.tns.NativeScriptActivity");
+        options.AddAdditionalAppiumOption("appWaitPackage", "org.nativescript.retailpos");
+        options.AddAdditionalAppiumOption("appWaitActivity", "com.tns.NativeScriptActivity");
         options.AddAdditionalAppiumOption("autoGrantPermissions", true);
         options.AddAdditionalAppiumOption("noReset", false);
         options.AddAdditionalAppiumOption("newCommandTimeout", 120);
@@ -59,13 +60,15 @@ public class PosRegressionTests
         {
             PlatformName = "Android",
             AutomationName = "UiAutomator2",
-            DeviceName = Setting("BROWSERSTACK_DEVICE_NAME") ?? "Samsung Galaxy S23"
+            DeviceName = Setting("BROWSERSTACK_DEVICE_NAME") ?? "Samsung Galaxy S25",
+            PlatformVersion = Setting("BROWSERSTACK_OS_VERSION") ?? "15.0"
         };
 
         options.App = app;
-        options.AddAdditionalAppiumOption("platformVersion", Setting("BROWSERSTACK_OS_VERSION") ?? "13.0");
         options.AddAdditionalAppiumOption("appPackage", "org.nativescript.retailpos");
         options.AddAdditionalAppiumOption("appActivity", "com.tns.NativeScriptActivity");
+        options.AddAdditionalAppiumOption("appWaitPackage", "org.nativescript.retailpos");
+        options.AddAdditionalAppiumOption("appWaitActivity", "com.tns.NativeScriptActivity");
         options.AddAdditionalAppiumOption("autoGrantPermissions", true);
         options.AddAdditionalAppiumOption("noReset", false);
         options.AddAdditionalAppiumOption("newCommandTimeout", 120);
@@ -83,7 +86,7 @@ public class PosRegressionTests
             ["appiumLogs"] = "true"
         };
 
-        options.AddAdditionalOption("bstack:options", browserStackOptions);
+        options.AddAdditionalAppiumOption("bstack:options", browserStackOptions);
         return options;
     }
 
@@ -118,6 +121,61 @@ public class PosRegressionTests
     }
 
     [Test]
+    public void ProductCardsExposeStableAutomationTargets()
+    {
+        Assert.That(TextByAccessibilityId("product-name-p1"), Is.EqualTo("Running Shoe"));
+        Assert.That(TextByAccessibilityId("product-meta-p1"), Is.EqualTo("shoes / running"));
+        Assert.That(TextByAccessibilityId("product-price-p1"), Is.EqualTo("$89.99"));
+        Assert.That(TextByAccessibilityId("product-graphic-text-p1"), Is.EqualTo("SHOE"));
+        Assert.That(ElementByAccessibilityId("product-add-p1").Displayed, Is.True);
+    }
+
+    [Test]
+    public void FiltersCatalogByCategoryUsingStableTargets()
+    {
+        TapByAccessibilityId("filter-boots");
+
+        Assert.That(TextByAccessibilityId("product-name-p6"), Is.EqualTo("Hiking Boot"));
+        Assert.That(TextByAccessibilityId("product-meta-p6"), Is.EqualTo("boots / hiking"));
+        Assert.That(TextByAccessibilityId("product-price-p6"), Is.EqualTo("$119.99"));
+
+        TapByAccessibilityId("filter-accessories");
+
+        Assert.That(TextByAccessibilityId("product-name-p16"), Is.EqualTo("Crew Socks"));
+        Assert.That(TextByAccessibilityId("product-meta-p16"), Is.EqualTo("accessories / socks"));
+        Assert.That(TextByAccessibilityId("product-price-p16"), Is.EqualTo("$9.99"));
+    }
+
+    [Test]
+    public void AddingSameVariantTwiceIncrementsQuantityAndTotals()
+    {
+        TapByAccessibilityId("product-add-p1");
+        TapByAccessibilityId("product-add-p1");
+
+        Assert.That(TextByAccessibilityId("cart-count"), Is.EqualTo("2 items"));
+        Assert.That(TextByAccessibilityId("cart-item-name-v1"), Is.EqualTo("Running Shoe"));
+        Assert.That(TextByAccessibilityId("cart-item-detail-v1"), Is.EqualTo("8 Black Qty: 2"));
+        Assert.That(TextByAccessibilityId("cart-item-price-v1"), Is.EqualTo("$179.98"));
+        Assert.That(TextByAccessibilityId("cart-subtotal"), Is.EqualTo("Subtotal: $179.98"));
+        Assert.That(TextByAccessibilityId("cart-tax"), Is.EqualTo("Tax: $14.40"));
+        Assert.That(TextByAccessibilityId("cart-total"), Is.EqualTo("Total: $194.38"));
+    }
+
+    [Test]
+    public void AddsAccessoryWithSingleVariantDirectlyToCart()
+    {
+        TapByAccessibilityId("filter-accessories");
+        TapByAccessibilityId("product-add-p16");
+
+        Assert.That(TextByAccessibilityId("cart-count"), Is.EqualTo("1 item"));
+        Assert.That(TextByAccessibilityId("cart-item-name-v19"), Is.EqualTo("Crew Socks"));
+        Assert.That(TextByAccessibilityId("cart-item-detail-v19"), Is.EqualTo("OS Black Qty: 1"));
+        Assert.That(TextByAccessibilityId("cart-subtotal"), Is.EqualTo("Subtotal: $9.99"));
+        Assert.That(TextByAccessibilityId("cart-tax"), Is.EqualTo("Tax: $0.80"));
+        Assert.That(TextByAccessibilityId("cart-total"), Is.EqualTo("Total: $10.79"));
+    }
+
+    [Test]
     public void CompletesDemoCardCheckoutAndClearsCart()
     {
         TapByAccessibilityId("product-add-p1");
@@ -133,6 +191,23 @@ public class PosRegressionTests
 
         Assert.That(TextByAccessibilityId("cart-count"), Is.EqualTo("Empty cart"));
         Assert.That(TextByAccessibilityId("header-total"), Is.EqualTo("Total: $0.00"));
+    }
+
+    [Test]
+    public void DeclinedDemoCardShowsErrorAndKeepsCartForRetry()
+    {
+        TapByAccessibilityId("product-add-p1");
+        TapByAccessibilityId("checkout-button");
+        SetTextByAccessibilityId("payment-card-input", "4000000000000002");
+        TapByAccessibilityId("payment-submit-button");
+
+        WaitForAccessibilityId("message-text");
+
+        Assert.That(TextByAccessibilityId("message-text"), Is.EqualTo("Demo card declined."));
+        Assert.That(TextByAccessibilityId("cart-count"), Is.EqualTo("1 item"));
+        Assert.That(TextByAccessibilityId("cart-item-detail-v1"), Is.EqualTo("8 Black Qty: 1"));
+        Assert.That(TextByAccessibilityId("cart-total"), Is.EqualTo("Total: $97.19"));
+        Assert.That(TextByAccessibilityId("payment-title"), Is.EqualTo("Charge $97.19"));
     }
 
     [Test]

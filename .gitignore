@@ -15,12 +15,14 @@ yarn-error.log*
 .AppleDouble
 .LSOverride
 .idea
+.vs/
 .cloud
 .project
 tmp/
 typings/
 *.db
 emulator-*.png
+retail-pos-*.png
 /ns
 appium-results/
 

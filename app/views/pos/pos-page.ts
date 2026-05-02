@@ -9,6 +9,11 @@ let vm: Observable;
 export function onLoaded(args: EventData) {
   const page = args.object as Page;
   vm = new Observable();
+  vm.set("messageText", "");
+  vm.set("messageVisible", visibility(false));
+  vm.set("paymentCardNumber", "");
+  vm.set("paymentTitleText", "");
+  vm.set("paymentVisible", visibility(false));
   page.bindingContext = vm;
   refresh();
 }

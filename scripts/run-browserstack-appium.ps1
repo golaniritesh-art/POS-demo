@@ -31,6 +31,8 @@ function Invoke-CheckedCommand {
 $username = Require-Env "BROWSERSTACK_USERNAME"
 $accessKey = Require-Env "BROWSERSTACK_ACCESS_KEY"
 
+Add-Type -AssemblyName System.Net.Http
+
 if (-not $SkipBuild) {
     Invoke-CheckedCommand "npm" @("run", "android:build")
 }
