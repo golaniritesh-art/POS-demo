@@ -121,7 +121,7 @@ jobs:
       - name: Install Appium server and UiAutomator2 driver
         run: |
           npm install -g appium@2
-          appium driver install uiautomator2
+          appium driver install uiautomator2@4.2.9
 
       - name: Enable KVM
         run: |
@@ -234,7 +234,7 @@ jobs:
         if: ${{ steps.browserstack_secrets.outputs.configured == 'true' }}
         shell: pwsh
         run: ./scripts/run-browserstack-appium.ps1
-        continue-on-error: true
+        
 
       - name: Create or update GitHub issue on Appium failure
         if: failure()
@@ -300,6 +300,7 @@ jobs:
     needs:
       - ci
       - appium-regression
+      - browserstack-appium
     if: ${{ always() && contains(needs.*.result, 'failure') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     outputs:
       issue_number: ${{ steps.create_issue.outputs.issue_number }}
@@ -318,6 +319,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           CI_RESULT: ${{ needs.ci.result }}
           APPIUM_RESULT: ${{ needs.appium-regression.result }}
+          BROWSERSTACK_RESULT: ${{ needs.browserstack-appium.result }}
         run: |
           title="CI/CD failure: ${REF_NAME} ${COMMIT_SHA:0:7}"
           body="$(cat <<EOF
@@ -329,6 +331,7 @@ jobs:
           - Commit: ${COMMIT_SHA}
           - CI result: ${CI_RESULT}
           - Appium regression result: ${APPIUM_RESULT}
+          - BrowserStack Appium result: ${BROWSERSTACK_RESULT}
 
           Check the workflow artifacts for:
           - Android debug APK
