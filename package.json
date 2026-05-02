@@ -4,9 +4,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "android:build": "ns build android",
+    "android:build": "npx ns build android",
     "test:appium": "dotnet test tests/AppiumRegression/AppiumRegression.csproj",
-    "test:browserstack": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-browserstack-appium.ps1",
+    "test:browserstack": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-browserstack-appium.ps1",
     "test:browserstack:uploaded": "dotnet test tests/AppiumRegression/AppiumRegression.csproj -- TestRunParameters.Parameter(name=\"BROWSERSTACK_ENABLED\", value=\"true\")"
   },
   "dependencies": {
@@ -15,8 +15,10 @@
     "mobx": "^6.15.0"
   },
   "devDependencies": {
+    "@nativescript/android": "~9.0.0",
     "@nativescript/types": "~9.0.0",
     "@nativescript/webpack": "~5.0.25",
+    "nativescript": "^9.0.6",
     "typescript": "~5.4.0"
   }
 }
