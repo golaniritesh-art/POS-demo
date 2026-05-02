@@ -100,7 +100,8 @@ function refresh() {
       name: product.name,
       categoryText: `${product.category} / ${product.subCategory}`,
       priceText: money(product.price),
-      graphicText: graphicText(product.category)
+      graphicText: graphicText(product.category),
+      addAutomationText: `product-add-${product.id}`
     }))
   );
 
@@ -109,7 +110,10 @@ function refresh() {
     cartStore.items.map(item => ({
       ...item,
       detail: `${item.size || ""} ${item.color || ""} Qty: ${item.qty}`,
-      priceText: money(item.price * item.qty)
+      priceText: money(item.price * item.qty),
+      nameAutomationText: `cart-item-name-${item.variantId}`,
+      detailAutomationText: `cart-item-detail-${item.variantId}`,
+      priceAutomationText: `cart-item-price-${item.variantId}`
     }))
   );
 

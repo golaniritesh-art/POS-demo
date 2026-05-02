@@ -22,6 +22,11 @@ typings/
 *.db
 emulator-*.png
 /ns
+appium-results/
+
+# .NET
+bin/
+obj/
 
 # Visual Studio Code
 .vscode/*

@@ -1,0 +1,43 @@
+trigger:
+  branches:
+    include:
+      - master
+
+pr:
+  branches:
+    include:
+      - master
+
+pool:
+  vmImage: windows-latest
+
+variables:
+  nodeVersion: "20.x"
+  dotnetVersion: "8.0.x"
+
+steps:
+  - checkout: self
+    clean: true
+
+  - task: NodeTool@0
+    displayName: Use Node.js $(nodeVersion)
+    inputs:
+      versionSpec: $(nodeVersion)
+
+  - task: UseDotNet@2
+    displayName: Use .NET SDK $(dotnetVersion)
+    inputs:
+      packageType: sdk
+      version: $(dotnetVersion)
+
+  - script: npm ci
+    displayName: Install npm dependencies
+
+  - script: npx tsc --noEmit
+    displayName: Type-check NativeScript app
+
+  - script: dotnet restore tests/AppiumRegression/AppiumRegression.csproj
+    displayName: Restore C# Appium regression project
+
+  - script: dotnet build tests/AppiumRegression/AppiumRegression.csproj --configuration Release --no-restore
+    displayName: Build C# Appium regression project
