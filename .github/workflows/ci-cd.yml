@@ -27,7 +27,7 @@ on:
         type: string
 
 permissions:
-  contents: write
+  contents: read
   issues: write
   pull-requests: write
   actions: read
@@ -234,6 +234,65 @@ jobs:
         if: ${{ steps.browserstack_secrets.outputs.configured == 'true' }}
         shell: pwsh
         run: ./scripts/run-browserstack-appium.ps1
+        continue-on-error: true
+
+      - name: Create or update GitHub issue on Appium failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = "🚨 Appium Failure - BrowserStack";
+
+            const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            const body = [
+              "## ❌ BrowserStack Appium Failure",
+              "",
+              "### 🔗 Run",
+              runUrl,
+              "",
+              "### 📌 Details",
+              `- Workflow: ${context.workflow}`,
+              `- Branch: ${context.ref}`,
+              `- Commit: ${context.sha}`,
+              "",
+              "### 🧪 Failure Type",
+              "Most likely causes:",
+              "- UI elements not found (automationText missing)",
+              "- App not fully loaded",
+              "- Wrong selectors",
+              "- Slow device startup",
+              "",
+              "---",
+              "_Auto-created by CI_"
+            ].join("\n");
+
+            // Find existing issue
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              labels: "appium,browserstack"
+            });
+
+            const existing = issues.find(i => i.title === title);
+
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ["bug", "ci", "appium", "browserstack"]
+              });
+            }
 
   create-failure-issue:
     name: Create GitHub Issue On Failure
