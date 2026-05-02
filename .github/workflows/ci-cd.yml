@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   ci:
@@ -46,11 +47,10 @@ jobs:
       - name: Build C# Appium regression project
         run: dotnet build tests/AppiumRegression/AppiumRegression.csproj --configuration Release --no-restore
 
-  android-debug-apk:
-    name: Build Android Debug APK
+  appium-regression:
+    name: Appium Regression
     runs-on: ubuntu-latest
     needs: ci
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
 
     steps:
       - name: Checkout
@@ -68,18 +68,111 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
       - name: Install npm dependencies
         run: npm ci
 
+      - name: Restore C# Appium regression project
+        run: dotnet restore tests/AppiumRegression/AppiumRegression.csproj
+
       - name: Build Android debug APK
         run: npx ns build android
 
+      - name: Install Appium server and UiAutomator2 driver
+        run: |
+          npm install -g appium@2
+          appium driver install uiautomator2
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run C# Appium regression suite
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: |
+            mkdir -p appium-results
+            appium --base-path / --log appium-results/appium.log > appium-results/appium-console.log 2>&1 &
+            for i in {1..60}; do
+              if curl --silent --fail http://127.0.0.1:4723/status > /dev/null; then
+                break
+              fi
+              sleep 2
+            done
+            dotnet test tests/AppiumRegression/AppiumRegression.csproj \
+              --configuration Release \
+              --logger "trx;LogFileName=appium-regression.trx" \
+              --results-directory appium-results
+
       - name: Upload Android debug APK
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: retail-pos-debug-apk
           path: platforms/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+      - name: Upload Appium regression artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: appium-regression-results
+          path: appium-results
+          if-no-files-found: warn
+
+  create-failure-issue:
+    name: Create GitHub Issue On Failure
+    runs-on: ubuntu-latest
+    needs:
+      - ci
+      - appium-regression
+    if: ${{ always() && contains(needs.*.result, 'failure') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+
+    steps:
+      - name: Create failure issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          COMMIT_SHA: ${{ github.sha }}
+          REF_NAME: ${{ github.ref_name }}
+          EVENT_NAME: ${{ github.event_name }}
+          CI_RESULT: ${{ needs.ci.result }}
+          APPIUM_RESULT: ${{ needs.appium-regression.result }}
+        run: |
+          title="CI/CD failure: ${REF_NAME} ${COMMIT_SHA:0:7}"
+          body="$(cat <<EOF
+          Automated CI/CD failure detected.
+
+          - Workflow run: ${RUN_URL}
+          - Event: ${EVENT_NAME}
+          - Ref: ${REF_NAME}
+          - Commit: ${COMMIT_SHA}
+          - CI result: ${CI_RESULT}
+          - Appium regression result: ${APPIUM_RESULT}
+
+          Check the workflow artifacts for:
+          - Android debug APK
+          - Appium server logs
+          - NUnit TRX test results
+          EOF
+          )"
+
+          gh issue create \
+            --repo "${REPOSITORY}" \
+            --title "${title}" \
+            --body "${body}"
