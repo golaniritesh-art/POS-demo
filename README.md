@@ -103,13 +103,6 @@ This project showcases:
 
 ---
 
-## 💡 Interview Talking Points
-
-- “Automated full POS checkout flow using Appium and validated UI consistency.”
-- “Executed tests across local and BrowserStack environments for scalability.”
-- “Designed framework to simulate real-world retail transactions.”
-
----
 
 ## 🚀 Future Scope
 
