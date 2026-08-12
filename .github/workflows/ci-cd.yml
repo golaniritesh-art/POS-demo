@@ -142,10 +142,7 @@ jobs:
             appium --base-path / --log appium-results/appium.log > appium-results/appium-console.log 2>&1 &
             for i in $(seq 1 60); do if curl --silent --fail http://127.0.0.1:4723/status > /dev/null; then break; fi; sleep 2; done
             curl --silent --fail http://127.0.0.1:4723/status > /dev/null
-            dotnet test tests/AppiumRegression/AppiumRegression.csproj \
-              --configuration Release \
-              --logger "trx;LogFileName=appium-regression.trx" \
-              --results-directory appium-results
+            dotnet test tests/AppiumRegression/AppiumRegression.csproj --configuration Release --logger "trx;LogFileName=appium-regression.trx" --results-directory appium-results
 
       - name: Upload Android debug APK
         if: always()
@@ -240,10 +237,7 @@ jobs:
             appium --base-path / --log robot-results/appium.log > robot-results/appium-console.log 2>&1 &
             for i in $(seq 1 60); do if curl --silent --fail http://127.0.0.1:4723/status > /dev/null; then break; fi; sleep 2; done
             curl --silent --fail http://127.0.0.1:4723/status > /dev/null
-            python -m robot \
-              --include smoke \
-              --outputdir robot-results \
-              tests/RobotFramework/suites
+            python -m robot --include smoke --outputdir robot-results tests/RobotFramework/suites
 
       - name: Upload Robot Framework artifacts
         if: always()
