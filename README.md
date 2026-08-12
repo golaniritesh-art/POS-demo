@@ -4,6 +4,45 @@ A **mobile Point-of-Sale (POS) demo application** built using **NativeScript (An
 
 This project demonstrates real-world **retail transaction workflows**, including inventory management, cart operations, checkout, and backend validation concepts.
 
+## Automation integrations
+
+### BrowserStack integration ready
+
+BrowserStack App Automate integration is implemented for Android Appium tests. The project can build and upload the debug APK automatically, or reuse an existing `bs://` app ID. Device, OS, project, and build metadata are configurable through environment variables, while credentials are supplied through GitHub Actions secrets or local environment variables.
+
+```powershell
+$env:BROWSERSTACK_USERNAME = "your_username"
+$env:BROWSERSTACK_ACCESS_KEY = "your_access_key"
+$env:BROWSERSTACK_APP = "bs://your_uploaded_app_id"
+npm run test:browserstack
+```
+
+See [BrowserStack Appium testing](docs/browserstack-testing.md) for local, uploaded-app, and GitHub Actions configuration.
+
+### Robot Framework integration
+
+Robot Framework runs alongside the existing C# NUnit Appium suite. It uses the same stable NativeScript resource IDs and supports both connected Android devices and BrowserStack.
+
+Install its isolated Python environment once:
+
+```powershell
+.\scripts\run-robot-appium.ps1 -InstallDependencies -InstallOnly
+```
+
+Run the Robot Framework smoke suite on a connected Android device:
+
+```powershell
+npm run test:robot:smoke
+```
+
+Run the same suite on BrowserStack:
+
+```powershell
+.\scripts\run-robot-appium.ps1 -UseBrowserStack -Include smoke
+```
+
+The smoke suite covers application launch, cart totals, and approved demo-card checkout.
+
 ---
 
 ## 🔥 Key Highlights
@@ -37,8 +76,8 @@ This project demonstrates real-world **retail transaction workflows**, including
 
 | Component | Details |
 |----------|--------|
-| Framework | Appium |
-| Language | C# |
+| Framework | Appium with NUnit and Robot Framework |
+| Language | C# and Robot Framework/Python |
 | Platform | Android |
 | Execution | Local + BrowserStack |
 | Test Type | UI + End-to-End |
@@ -62,10 +101,10 @@ This project demonstrates real-world **retail transaction workflows**, including
 ## 🧱 Tech Stack
 
 - **Frontend:** NativeScript (Android)
-- **Automation:** Appium + C#
+- **Automation:** Appium + C# NUnit + Robot Framework
 - **Database:** SQLite
 - **Cloud Testing:** BrowserStack
-- **CI/CD (Planned):** GitHub Actions
+- **CI/CD:** GitHub Actions and Azure Pipelines
 
 ---
 
@@ -79,10 +118,6 @@ This project demonstrates real-world **retail transaction workflows**, including
 ---
 
 ## 📌 Pending Enhancements
-
-- 🔄 **BrowserStack CI Integration (GitHub Actions)**
-  - Enable automated cloud execution pipelines  
-  - Improve scalability and parallel execution  
 
 - 🤖 **Self-Healing Automation**
   - AI-based locator recovery for flaky tests  
