@@ -140,16 +140,9 @@ jobs:
           script: |
             mkdir -p appium-results
             appium --base-path / --log appium-results/appium.log > appium-results/appium-console.log 2>&1 &
-            for i in {1..60}; do
-              if curl --silent --fail http://127.0.0.1:4723/status > /dev/null; then
-                break
-              fi
-              sleep 2
-            done
-            dotnet test tests/AppiumRegression/AppiumRegression.csproj \
-              --configuration Release \
-              --logger "trx;LogFileName=appium-regression.trx" \
-              --results-directory appium-results
+            for i in $(seq 1 60); do if curl --silent --fail http://127.0.0.1:4723/status > /dev/null; then break; fi; sleep 2; done
+            curl --silent --fail http://127.0.0.1:4723/status > /dev/null
+            dotnet test tests/AppiumRegression/AppiumRegression.csproj --configuration Release --logger "trx;LogFileName=appium-regression.trx" --results-directory appium-results
 
       - name: Upload Android debug APK
         if: always()
@@ -165,6 +158,93 @@ jobs:
         with:
           name: appium-regression-results
           path: appium-results
+          if-no-files-found: warn
+
+  robot-framework:
+    name: Robot Framework Appium
+    runs-on: ubuntu-latest
+    needs: appium-regression
+    if: ${{ always() && needs.appium-regression.result != 'cancelled' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: tests/RobotFramework/requirements.txt
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Robot Framework dependencies
+        run: python -m pip install -r tests/RobotFramework/requirements.txt
+
+      - name: Install Appium server and UiAutomator2 driver
+        run: |
+          npm install -g appium@2
+          appium driver install uiautomator2@4.2.9
+
+      - name: Download Android debug APK
+        uses: actions/download-artifact@v4
+        with:
+          name: retail-pos-debug-apk
+          path: robot-apk
+
+      - name: Locate Android debug APK
+        id: locate_robot_apk
+        run: |
+          apk_path="$(find robot-apk -type f -name '*.apk' | sort | head -n 1)"
+          if [ -z "$apk_path" ]; then
+            echo "No APK found in the downloaded artifact."
+            exit 1
+          fi
+
+          echo "apk_path=$(realpath "$apk_path")" >> "$GITHUB_OUTPUT"
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run Robot Framework smoke suite
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          ROBOT_APP_PATH: ${{ steps.locate_robot_apk.outputs.apk_path }}
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: |
+            mkdir -p robot-results
+            appium --base-path / --log robot-results/appium.log > robot-results/appium-console.log 2>&1 &
+            for i in $(seq 1 60); do if curl --silent --fail http://127.0.0.1:4723/status > /dev/null; then break; fi; sleep 2; done
+            curl --silent --fail http://127.0.0.1:4723/status > /dev/null
+            python -m robot --include smoke --outputdir robot-results tests/RobotFramework/suites
+
+      - name: Upload Robot Framework artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: robot-framework-results
+          path: robot-results
           if-no-files-found: warn
 
   browserstack-appium:
@@ -300,6 +380,7 @@ jobs:
     needs:
       - ci
       - appium-regression
+      - robot-framework
       - browserstack-appium
     if: ${{ always() && contains(needs.*.result, 'failure') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     outputs:
@@ -319,6 +400,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           CI_RESULT: ${{ needs.ci.result }}
           APPIUM_RESULT: ${{ needs.appium-regression.result }}
+          ROBOT_RESULT: ${{ needs.robot-framework.result }}
           BROWSERSTACK_RESULT: ${{ needs.browserstack-appium.result }}
         run: |
           title="CI/CD failure: ${REF_NAME} ${COMMIT_SHA:0:7}"
@@ -331,12 +413,14 @@ jobs:
           - Commit: ${COMMIT_SHA}
           - CI result: ${CI_RESULT}
           - Appium regression result: ${APPIUM_RESULT}
+          - Robot Framework result: ${ROBOT_RESULT}
           - BrowserStack Appium result: ${BROWSERSTACK_RESULT}
 
           Check the workflow artifacts for:
           - Android debug APK
           - Appium server logs
           - NUnit TRX test results
+          - Robot Framework output, log, and report
           EOF
           )"
 

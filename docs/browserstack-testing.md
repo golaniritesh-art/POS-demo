@@ -77,3 +77,40 @@ env:
 If you already uploaded the app, pass `browserstack_app` to `workflow_dispatch` or set `BROWSERSTACK_APP` in the workflow environment. If you leave it blank, the upload script will upload the APK for you.
 
 The BrowserStack mode sends `bstack:options` with text, Appium, device, visual, and network logs enabled so failures have enough diagnostics in the BrowserStack dashboard.
+# Robot Framework Appium wrapper
+
+Robot Framework runs alongside the existing C# Appium suite. It uses the same
+NativeScript `automationText` accessibility IDs and can target either a local
+Android emulator or BrowserStack.
+
+Install the isolated Python dependencies once:
+
+```powershell
+.\scripts\run-robot-appium.ps1 -InstallDependencies -InstallOnly
+```
+
+For a local emulator, make sure an Android device is visible to `adb`. The
+wrapper builds the APK, starts the locally installed Appium server, runs the
+suite, and stops Appium afterward:
+
+```powershell
+npm run test:robot:smoke
+```
+
+To reuse an existing APK:
+
+```powershell
+.\scripts\run-robot-appium.ps1 -SkipBuild -ApkPath .\platforms\android\app\build\outputs\apk\debug\app-debug.apk
+```
+
+For BrowserStack, set `BROWSERSTACK_USERNAME`, `BROWSERSTACK_ACCESS_KEY`, and
+`BROWSERSTACK_APP`, then run:
+
+```powershell
+.\scripts\run-robot-appium.ps1 -UseBrowserStack -Include smoke
+```
+
+Optional BrowserStack settings are `BROWSERSTACK_DEVICE_NAME`,
+`BROWSERSTACK_OS_VERSION`, `BROWSERSTACK_PROJECT_NAME`,
+`BROWSERSTACK_BUILD_NAME`, and `BROWSERSTACK_SESSION_NAME`. Robot output,
+reports, screenshots, and the local Appium log are written to `robot-results/`.

@@ -27,6 +27,16 @@ retail-pos-*.png
 appium-results/
 .browserstack.env.local
 
+# Codex project files
+.codex/
+.agents/
+
+# Robot Framework / Python
+.venv-robot/
+robot-results/
+__pycache__/
+*.py[cod]
+
 # .NET
 bin/
 obj/
